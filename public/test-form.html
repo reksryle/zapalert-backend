@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZAPALERT Backend Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .test-section {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border-left: 5px solid #4facfe;
+        }
+
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        input[type="file"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .response.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .response.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .response.info {
+            background: #d1ecf1;
+            border: 1px solid #b8daff;
+            color: #0c5460;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-success { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-info { background: #17a2b8; }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                margin: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ ZAPALERT</h1>
+            <p>Backend API Testing Interface</p>
+        </div>
+
+        <div class="content">
+            <!-- Connection Test -->
+            <div class="test-section">
+                <h2>
+                    <span class="status-indicator status-info"></span>
+                    1. Connection Test
+                </h2>
+                <p>Test if your backend server is running and responding.</p>
+                <button class="btn" onclick="testConnection()">Test Connection</button>
+                <button class="btn btn-secondary" onclick="testPendingUsers()">Check Pending Users</button>
+                <div id="connectionResponse" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- User Signup Test -->
+            <div class="test-section">
+                <h2>
+                    <span class="status-indicator status-success"></span>
+                    2. User Signup Test
+                </h2>
+                <form id="signupForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" name="email" value="john.doe@student.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password:</label>
+                            <input type="password" id="password" name="password" value="password123" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="firstName">First Name:</label>
+                            <input type="text" id="firstName" name="firstName" value="John" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="lastName">Last Name:</label>
+                            <input type="text" id="lastName" name="lastName" value="Doe" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="studentId">Student ID:</label>
+                            <input type="text" id="studentId" name="studentId" value="ST2024001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course">Course:</label>
+                            <input type="text" id="course" name="course" value="Computer Science" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="year">Year:</label>
+                            <select id="year" name="year" required>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3" selected>3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="idImage">ID Image:</label>
+                            <input type="file" id="idImage" name="idImage" accept="image/*" required>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn">Submit Registration</button>
+                    <button type="button" class="btn btn-secondary" onclick="generateRandomData()">Generate Random Data</button>
+                </form>
+                <div id="signupResponse" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- User Login Test -->
+            <div class="test-section">
+                <h2>
+                    <span class="status-indicator status-error"></span>
+                    3. User Login Test
+                </h2>
+                <p>Test login with approved user credentials.</p>
+                <form id="loginForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="loginEmail">Email:</label>
+                            <input type="email" id="loginEmail" name="email" value="john.doe@student.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password:</label>
+                            <input type="password" id="loginPassword" name="password" value="password123" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn">Test Login</button>
+                </form>
+                <div id="loginResponse" class="response" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5001';
+
+        // Test connection
+        async function testConnection() {
+            showResponse('connectionResponse', 'Testing connection...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('connectionResponse', 
+                        `✅ CONNECTION SUCCESS!\n\nStatus: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`, 
+                        'success');
+                } else {
+                    showResponse('connectionResponse', 
+                        `❌ CONNECTION FAILED\n\nStatus: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResponse('connectionResponse', 
+                    `❌ CONNECTION ERROR\n\nError: ${error.message}\n\nMake sure your backend is running on port 5001!`, 
+                    'error');
+            }
+        }
+
+        // Test pending users
+        async function testPendingUsers() {
+            showResponse('connectionResponse', 'Checking pending users...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/pending-users`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('connectionResponse', 
+                        `✅ PENDING USERS RETRIEVED!\n\nCount: ${data.count}\nUsers: ${JSON.stringify(data.data, null, 2)}`, 
+                        'success');
+                } else {
+                    showResponse('connectionResponse', 
+                        `❌ FAILED TO GET PENDING USERS\n\nStatus: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResponse('connectionResponse', 
+                    `❌ ERROR FETCHING PENDING USERS\n\nError: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // Handle signup form
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            showResponse('signupResponse', 'Submitting registration...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/signup`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('signupResponse', 
+                        `✅ REGISTRATION SUCCESSFUL!\n\nStatus: ${response.status}\nMessage: ${data.message}\nUser Data: ${JSON.stringify(data.data, null, 2)}`, 
+                        'success');
+                } else {
+                    showResponse('signupResponse', 
+                        `❌ REGISTRATION FAILED\n\nStatus: ${response.status}\nMessage: ${data.message}\nErrors: ${JSON.stringify(data.errors || data.error, null, 2)}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResponse('signupResponse', 
+                    `❌ REGISTRATION ERROR\n\nError: ${error.message}`, 
+                    'error');
+            }
+        });
+
+        // Handle login form
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const loginData = Object.fromEntries(formData);
+            
+            showResponse('loginResponse', 'Testing login...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(loginData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('loginResponse', 
+                        `✅ LOGIN SUCCESSFUL!\n\nStatus: ${response.status}\nMessage: ${data.message}\nToken: ${data.token}\nUser: ${JSON.stringify(data.user, null, 2)}`, 
+                        'success');
+                } else {
+                    showResponse('loginResponse', 
+                        `❌ LOGIN FAILED\n\nStatus: ${response.status}\nMessage: ${data.message}\n\nNote: User must be approved by admin to login!`, 
+                        'error');
+                }
+            } catch (error) {
+                showResponse('loginResponse', 
+                    `❌ LOGIN ERROR\n\nError: ${error.message}`, 
+                    'error');
+            }
+        });
+
+        // Generate random test data
+        function generateRandomData() {
+            const randomNum = Math.floor(Math.random() * 1000);
+            document.getElementById('email').value = `student${randomNum}@test.com`;
+            document.getElementById('firstName').value = `Student${randomNum}`;
+            document.getElementById('lastName').value = `Test${randomNum}`;
+            document.getElementById('studentId').value = `ST2024${randomNum.toString().padStart(3, '0')}`;
+            document.getElementById('course').value = ['Computer Science', 'Information Technology', 'Engineering', 'Business'][Math.floor(Math.random() * 4)];
+            document.getElementById('year').value = Math.floor(Math.random() * 4) + 1;
+        }
+
+        // Show response helper
+        function showResponse(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `response ${type}`;
+            element.style.display = 'block';
+            element.scrollTop = element.scrollHeight;
+        }
+
+        // Auto-test connection on page load
+        window.addEventListener('load', () => {
+            setTimeout(testConnection, 1000);
+        });
+    </script>
+</body>
+</html>
