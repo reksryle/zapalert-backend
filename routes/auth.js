@@ -70,36 +70,22 @@ router.post("/signup", upload.single("validId"), async (req, res) => {
 router.post("/login", async (req, res) => {
   console.log("📥 Login request:", req.body);
 
-  const user = await User.findOne({ username: req.body.username });
-  console.log("🔍 Found user:", user);
-
-  if (!user) return res.status(404).json({ error: "User not found" });
-  if (user.status !== "approved") return res.status(403).json({ error: "Not approved" });
-
-  const isMatch = await bcrypt.compare(req.body.password, user.password);
-  console.log("✅ Password match:", isMatch);
-
   const { username, password } = req.body;
 
   try {
     const user = await User.findOne({ username });
+    console.log("🔍 Found user:", user);
 
-    if (!user) {
-      return res.status(401).json({ error: "Invalid username or password" });
-    }
-
-    if (user.status !== 'approved') {
-      return res.status(403).json({ error: "Account not approved by admin yet." });
-    }
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.status !== "approved") return res.status(403).json({ error: "Not approved" });
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("✅ Password match:", isMatch);
 
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-
-    // ✅ Send full user info
     res.status(200).json({
       message: "Login successful",
       user: {
@@ -114,6 +100,7 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
