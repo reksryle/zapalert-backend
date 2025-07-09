@@ -14,7 +14,8 @@ const PORT = process.env.PORT || 5001;
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'http://192.168.1.17:4173'
+    'http://192.168.1.17:4173',
+    'https://zapalert.netlify.app'  
   ],
   credentials: true,
 }));

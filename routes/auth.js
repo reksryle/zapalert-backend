@@ -37,7 +37,7 @@ router.post("/signup", upload.single("validId"), async (req, res) => {
 
         // ✅ Validate age before proceeding
     const numericAge = parseInt(age, 10);
-    if (age < 7 || age > 100) {
+    if (numericAge < 7 || age > 100) {
       return res.status(400).json({ message: "Please put your real age." });
     }
 
@@ -79,11 +79,16 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
+    if (user.status !== 'approved') {
+      return res.status(403).json({ error: "Account not approved by admin yet." });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
+
 
     // ✅ Send full user info
     res.status(200).json({
