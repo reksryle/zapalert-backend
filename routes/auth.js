@@ -68,8 +68,17 @@ router.post("/signup", upload.single("validId"), async (req, res) => {
 // ✅ LOGIN
 // routes/auth.js
 router.post("/login", async (req, res) => {
-    console.log('📥 Login request from:', req.ip);
-  console.log('Body:', req.body);
+  console.log("📥 Login request:", req.body);
+
+  const user = await User.findOne({ username: req.body.username });
+  console.log("🔍 Found user:", user);
+
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (user.status !== "approved") return res.status(403).json({ error: "Not approved" });
+
+  const isMatch = await bcrypt.compare(req.body.password, user.password);
+  console.log("✅ Password match:", isMatch);
+
   const { username, password } = req.body;
 
   try {
@@ -146,5 +155,8 @@ router.delete("/reject/:id", async (req, res) => {
   }
 });
 
+router.get("/test", (req, res) => {
+  res.json({ message: "✅ Backend is live!" });
+});
 
 module.exports = router;
