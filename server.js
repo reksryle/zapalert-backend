@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 
 // ✅ Allowed origins for both Express and Socket.IO
-const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000'];
+const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000', 'https://zapalert.netlify.app'];
 
 // ✅ Create and configure Socket.IO server
 const io = new Server(server, {
