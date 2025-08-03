@@ -111,11 +111,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ✅ Allow uploads to be accessed
 app.use('/uploads', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // safe for local dev
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*'); // ✅ allow cross-origin requests
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // ✅ prevent browser blocking
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type'); // ✅ optional but helpful
   next();
-});
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}, express.static(path.join(__dirname, 'uploads')));
 
 // ✅ MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {
