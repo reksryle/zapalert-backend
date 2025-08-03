@@ -6,7 +6,8 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const http = require('http');
 const { Server } = require('socket.io');
-const { User } = require('./models'); 
+const { User } = require('./models');
+const cookieParser = require("cookie-parser");
 
 dotenv.config();
 
@@ -44,7 +45,6 @@ io.on('connection', (socket) => {
     console.log(`📍 Resident ${username} connected with socket ID: ${socket.id}`);
   });
 
-
   socket.on('responder-update-min', ({ toUsername, message }) => {
     const targetSocketId = connectedResidents.get(toUsername);
     if (targetSocketId) {
@@ -55,7 +55,7 @@ io.on('connection', (socket) => {
     }
   });
 
-    socket.on("responded", (data) => {
+  socket.on("responded", (data) => {
     const targetSocketId = connectedResidents.get(data.username);
     if (targetSocketId) {
       io.to(targetSocketId).emit("responded", data);
@@ -86,8 +86,6 @@ io.on('connection', (socket) => {
   });
 });
 
-const cookieParser = require("cookie-parser");
-
 // ✅ Middleware
 app.use(cors({
   origin: function (origin, callback) {
@@ -99,24 +97,25 @@ app.use(cors({
   },
   credentials: true,
 }));
-
+app.options('*', cors()); // optional: for preflight requests
 
 app.use(cookieParser());
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Serve static files
+// ✅ Serve public static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ✅ Allow uploads to be accessed
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  }
-}));
+// ✅ Fix CORS for uploaded images
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Or restrict to Netlify URL
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // ✅ MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {
