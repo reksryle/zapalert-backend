@@ -102,8 +102,8 @@ router.post("/login", async (req, res) => {
     res
       .cookie("zapToken", token, {
         httpOnly: true,
-        secure: false, // change to true in production with HTTPS
-        sameSite: "Lax",
+        secure: true, // change to true in production with HTTPS
+        sameSite: "None",
         maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
       })
       .json({
@@ -166,8 +166,8 @@ router.get("/check-session", (req, res) => {
 router.post("/logout", (req, res) => {
   res.clearCookie("zapToken", {
     httpOnly: true,
-    secure: false, // true in production
-    sameSite: "Lax",
+    secure: true, // true in production
+    sameSite: "None",
   });
   res.json({ message: "Logged out successfully." });
 });
