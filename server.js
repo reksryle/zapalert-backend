@@ -31,55 +31,41 @@ const io = new Server(server, {
 
 // ✅ Map to store connected resident usernames to their socket IDs
 const connectedResidents = new Map();
+const connectedResponders = new Map();
 
 // ✅ Store in app context for access in routes
 app.set("io", io);
 app.set("socketMap", connectedResidents);
 
-// ✅ Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log('✅ New client connected:', socket.id);
 
-  socket.on('join-resident', (username) => {
+// ✅ Socket.IO connection handling
+
+io.on("connection", (socket) => {
+  console.log("✅ New client connected:", socket.id);
+  // Resident joins
+  socket.on("join-resident", (username) => {
     connectedResidents.set(username, socket.id);
     console.log(`📍 Resident ${username} connected with socket ID: ${socket.id}`);
   });
-
-  socket.on('responder-update-min', ({ toUsername, message }) => {
-    const targetSocketId = connectedResidents.get(toUsername);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('notify-resident', message);
-      console.log(`🚨 Notified ${toUsername}: ${message}`);
-    } else {
-      console.log(`❌ Username ${toUsername} not connected`);
-    }
+  // Responder joins
+  socket.on("join-responder", (responderId) => {
+    socket.responderId = responderId;
+    connectedResponders.set(responderId, socket.id);
+    console.log(`📍 Responder ${responderId} connected with socket ID: ${socket.id}`);
   });
-
-  socket.on("responded", (data) => {
-    const targetSocketId = connectedResidents.get(data.username);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("responded", data);
-      console.log(`✅ Sent 'responded' to ${data.username}`);
-    } else {
-      console.log(`❌ Could not find resident ${data.username} for 'responded'`);
-    }
-  });
-
-  socket.on("declined", (data) => {
-    const targetSocketId = connectedResidents.get(data.username);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("declined", data);
-      console.log(`✅ Sent 'declined' to ${data.username}`);
-    } else {
-      console.log(`❌ Could not find resident ${data.username} for 'declined'`);
-    }
-  });
-
-  socket.on('disconnect', () => {
+  // Disconnect cleanup
+  socket.on("disconnect", () => {
     for (let [username, id] of connectedResidents.entries()) {
       if (id === socket.id) {
         connectedResidents.delete(username);
-        console.log(`🔌 Disconnected: ${username}`);
+        console.log(`🔌 Disconnected resident: ${username}`);
+        break;
+      }
+    }
+    for (let [id, sid] of connectedResponders.entries()) {
+      if (sid === socket.id) {
+        connectedResponders.delete(id);
+        console.log(`🔌 Disconnected responder: ${id}`);
         break;
       }
     }
@@ -183,6 +169,12 @@ app.use('*', (req, res) => {
 
 // ✅ Start Server
 server.listen(PORT, () => {
+  const serverUrl =
+    process.env.NODE_ENV === "production"
+      ? "https://zapalert-backend.onrender.com"
+      : `http://localhost:${PORT}`;
+
   console.log(`ZAPALERT Backend running on port ${PORT}`);
-  console.log(`Server URL: https://zapalert-backend.onrender.com`);
+  console.log(`Server URL: ${serverUrl}`);
 });
+

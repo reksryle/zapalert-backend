@@ -21,7 +21,9 @@ const reportSchema = new mongoose.Schema({
 // ✅ Create Model
 const Report = mongoose.model("Report", reportSchema);
 
-// ✅ POST /api/reports — submit emergency
+// ---------------------------
+// POST /api/reports — submit emergency
+// ---------------------------
 router.post("/", async (req, res) => {
   try {
     const {
@@ -41,9 +43,7 @@ router.post("/", async (req, res) => {
     }
 
     let parsedAge = Number(age);
-    if (isNaN(parsedAge)) {
-      parsedAge = undefined;
-    }
+    if (isNaN(parsedAge)) parsedAge = undefined;
 
     const newReport = new Report({
       type,
@@ -66,7 +66,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ GET /api/reports — fetch all reports
+// ---------------------------
+// GET /api/reports — fetch all reports
+// ---------------------------
 router.get("/", async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 });
@@ -77,81 +79,102 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ PATCH /api/reports/:id/respond — mark report as responded
+// ---------------------------
+// PATCH /api/reports/:id/respond — notify resident and other responders
+// ---------------------------
 router.patch("/:id/respond", authMiddleware, async (req, res) => {
   try {
-    const updated = await Report.findByIdAndUpdate(
-      req.params.id,
-      { status: "responded" },
-      { new: true }
-    );
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: "Report not found." });
 
-    if (!updated) {
-      return res.status(404).json({ error: "Report not found." });
-    }
-
-    // 🔔 Emit 'responded' event to resident
     const io = req.app.get("io");
     const socketMap = req.app.get("socketMap");
-    const residentSocketId = socketMap.get(updated.username);
+    const residentSocketId = socketMap.get(report.username);
 
+    const responderName = req.user
+      ? `${req.user.firstName} ${req.user.lastName}`
+      : "Responder";
+
+    // Update status in MongoDB
+    report.status = "responded";
+    await report.save();
+
+    // Notify resident
     if (residentSocketId) {
-      const responderName = req.user
-        ? `${req.user.firstName} ${req.user.lastName}`
-        : "Responder";
-
       io.to(residentSocketId).emit("responded", {
-        type: updated.type,
+        type: report.type,
         responderName,
+        residentName: `${report.firstName} ${report.lastName}`,
         time: new Date().toISOString(),
       });
-
-      console.log(`📤 Emitted 'responded' to ${updated.username}`);
-    } else {
-      console.warn(`⚠️ No socket found for resident ${updated.username}`);
+      console.log(`📤 Emitted 'responded' to ${report.username}`);
     }
 
-    res.json({ message: "Report marked as responded", report: updated });
+    // Notify other responders
+    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    io.sockets.sockets.forEach((socket) => {
+      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+        socket.emit("notify-responded", {
+          reportId: report._id,
+          type: report.type,
+          responderName,
+          residentName: `${report.firstName} ${report.lastName}`,
+          time: new Date().toISOString(),
+        });
+      }
+    });
+
+    res.json({ message: "Report marked as responded.", reportId: report._id, status: report.status });
   } catch (err) {
-    console.error("❌ Failed to update report:", err);
-    res.status(500).json({ error: "Failed to update report status." });
+    console.error("❌ Failed to process responded:", err);
+    res.status(500).json({ error: "Failed to mark as responded." });
   }
 });
 
-// ✅ PATCH /api/reports/:id/ontheway — mark report as on the way
-router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
-  console.log("✅ Received PATCH /ontheway request from:", req.user);
 
+// ---------------------------
+// PATCH /api/reports/:id/ontheway — mark report as on the way
+// ---------------------------
+router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
   try {
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
       { status: "on_the_way" },
       { new: true }
     );
-
-    if (!updated) {
-      return res.status(404).json({ error: "Report not found." });
-    }
+    if (!updated) return res.status(404).json({ error: "Report not found." });
 
     const io = req.app.get("io");
     const socketMap = req.app.get("socketMap");
     const residentSocketId = socketMap.get(updated.username);
 
-    if (residentSocketId) {
-      const responderName = req.user
-        ? `${req.user.firstName} ${req.user.lastName}`
-        : "Responder";
+    const responderName = req.user
+      ? `${req.user.firstName} ${req.user.lastName}`
+      : "Responder";
 
+    // Notify resident
+    if (residentSocketId) {
       io.to(residentSocketId).emit("notify-resident", {
         type: updated.type,
         responderName,
+        residentName: `${updated.firstName} ${updated.lastName}`,
         time: new Date().toISOString(),
       });
-
-      console.log(`🔔 Notified ${updated.username} from ${responderName}`);
-    } else {
-      console.warn(`⚠️ No socket found for resident ${updated.username}`);
     }
+
+    // Notify other responders
+    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    io.sockets.sockets.forEach((socket) => {
+      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+        socket.emit("notify-on-the-way", {
+          reportId: updated._id,
+          type: updated.type,
+          responderName,
+          residentName: `${updated.firstName} ${updated.lastName}`,
+          time: new Date().toISOString(),
+        });
+      }
+    });
 
     res.json({ message: "Report marked as on the way", report: updated });
   } catch (err) {
@@ -160,39 +183,49 @@ router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ DELETE /api/reports/:id — used by both responder and admin
+// ---------------------------
+// DELETE /api/reports/:id — decline report
+// ---------------------------
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    const deleted = await Report.findByIdAndDelete(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ error: "Report not found." });
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: "Report not found." });
+
+    const io = req.app.get("io");
+    const responderName = `${req.user.firstName} ${req.user.lastName}`;
+    const reportId = report._id;
+
+    const socketMap = req.app.get("socketMap");
+    const residentSocketId = socketMap.get(report.username);
+
+    // Notify resident
+    if (residentSocketId) {
+      io.to(residentSocketId).emit("declined", {
+        type: report.type,
+        responderName,
+        residentName: `${report.firstName} ${report.lastName}`,
+        time: new Date().toISOString(),
+      });
     }
 
-    // ✅ If responder is deleting, notify the resident
-    if (req.user.role !== "admin") {
-      const io = req.app.get("io");
-      const socketMap = req.app.get("socketMap");
-      const residentSocketId = socketMap.get(deleted.username);
-
-      if (residentSocketId) {
-        const responderName = `${req.user.firstName} ${req.user.lastName}`;
-
-        io.to(residentSocketId).emit("declined", {
-          type: deleted.type,
+    // Notify other responders
+    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    io.sockets.sockets.forEach((socket) => {
+      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+        socket.emit("responder-declined", {
+          reportId,
+          type: report.type,
           responderName,
+          residentName: `${report.firstName} ${report.lastName}`,
           time: new Date().toISOString(),
         });
-
-        console.log(`📤 Emitted 'declined' to ${deleted.username}`);
-      } else {
-        console.warn(`⚠️ No socket found for resident ${deleted.username}`);
       }
-    }
+    });
 
-    res.json({ message: "Report declined and removed." });
+    res.json({ message: "Report declined (hidden only for the acting responder)." });
   } catch (err) {
-    console.error("❌ Failed to delete report:", err);
-    res.status(500).json({ error: "Failed to delete report." });
+    console.error("❌ Failed to process decline:", err);
+    res.status(500).json({ error: "Failed to process decline." });
   }
 });
 
