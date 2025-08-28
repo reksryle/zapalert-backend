@@ -42,7 +42,7 @@ router.post("/signup", upload.single("validId"), async (req, res) => {
       return res.status(400).json({ message: "Age must be between 7 and 100." });
     }
 
-    const existing = await User.findOne({ username });
+    const existing = await User.findOne({ username: { $regex: `^${username}$`, $options: "i" } });
     if (existing) return res.status(400).json({ message: "Username already exists." });
 
     const hashedPassword = await bcrypt.hash(password, 10);
