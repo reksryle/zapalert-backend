@@ -102,8 +102,8 @@ router.post("/login", async (req, res) => {
     res
       .cookie("zapToken", token, {
         httpOnly: true,
-        secure: true, // change to true in production with HTTPS
-        sameSite: "None",
+        secure: process.env.NODE_ENV === "production", // true only on HTTPS
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // Safari fix
         maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
       })
       .json({
