@@ -99,11 +99,10 @@ router.post("/login", async (req, res) => {
       { expiresIn: "10y" }
     );
 
-    res
-      .cookie("zapToken", token, {
+      res.cookie("zapToken", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // true only on HTTPS
-        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // Safari fix
+        secure: true,       // required for SameSite=None
+        sameSite: "None",   // required for cross-domain Safari
         maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
       })
       .json({
