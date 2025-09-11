@@ -4,6 +4,13 @@ const mongoose = require("mongoose");
 const authMiddleware = require("../middleware/authMiddleware");
 
 // ✅ Define Report Schema
+const responderActionSchema = new mongoose.Schema({
+  responderId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  fullName: String,
+  action: { type: String, enum: ["on the way", "responded", "declined"] },
+  timestamp: { type: Date, default: Date.now },
+});
+
 const reportSchema = new mongoose.Schema({
   type: { type: String, required: true },
   description: { type: String, required: false, default: "" },
@@ -15,8 +22,11 @@ const reportSchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   status: { type: String, default: "pending" },
+  responders: [responderActionSchema],   // 👈 NEW
+  resolvedAt: { type: Date },            // 👈 NEW
   createdAt: { type: Date, default: Date.now },
 });
+
 
 // ✅ Create Model
 const Report = mongoose.model("Report", reportSchema);
@@ -97,6 +107,20 @@ router.patch("/:id/respond", authMiddleware, async (req, res) => {
 
     // Update status in MongoDB
     report.status = "responded";
+
+    // ✅ Track responder action
+    report.responders.push({
+      responderId: req.user._id,
+      fullName: responderName,
+      action: "responded",
+      timestamp: new Date(),
+    });
+
+    // ✅ Mark resolvedAt if not already set
+    if (!report.resolvedAt) {
+      report.resolvedAt = new Date();
+    }
+
     await report.save();
 
     // Notify resident
@@ -111,9 +135,14 @@ router.patch("/:id/respond", authMiddleware, async (req, res) => {
     }
 
     // Notify other responders
-    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    const currentResponderId =
+      req.user?._id?.toString() || req.user?.responderId || req.user?.username;
     io.sockets.sockets.forEach((socket) => {
-      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+      if (
+        socket.responderId &&
+        currentResponderId &&
+        socket.responderId.toString() !== currentResponderId
+      ) {
         socket.emit("notify-responded", {
           reportId: report._id,
           type: report.type,
@@ -124,22 +153,39 @@ router.patch("/:id/respond", authMiddleware, async (req, res) => {
       }
     });
 
-    res.json({ message: "Report marked as responded.", reportId: report._id, status: report.status });
+    res.json({
+      message: "Report marked as responded.",
+      reportId: report._id,
+      status: report.status,
+    });
   } catch (err) {
     console.error("❌ Failed to process responded:", err);
     res.status(500).json({ error: "Failed to mark as responded." });
   }
 });
 
-
 // ---------------------------
 // PATCH /api/reports/:id/ontheway — mark report as on the way
 // ---------------------------
 router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
   try {
+    const responderName = req.user
+      ? `${req.user.firstName} ${req.user.lastName}`
+      : "Responder";
+
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
-      { status: "on_the_way" },
+      {
+        status: "on the way",
+        $push: {
+          responders: {
+            responderId: req.user._id,
+            fullName: responderName,
+            action: "on the way",
+            timestamp: new Date(),
+          },
+        },
+      },
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: "Report not found." });
@@ -147,10 +193,6 @@ router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
     const io = req.app.get("io");
     const socketMap = req.app.get("socketMap");
     const residentSocketId = socketMap.get(updated.username);
-
-    const responderName = req.user
-      ? `${req.user.firstName} ${req.user.lastName}`
-      : "Responder";
 
     // Notify resident
     if (residentSocketId) {
@@ -163,9 +205,14 @@ router.patch("/:id/ontheway", authMiddleware, async (req, res) => {
     }
 
     // Notify other responders
-    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    const currentResponderId =
+      req.user?._id?.toString() || req.user?.responderId || req.user?.username;
     io.sockets.sockets.forEach((socket) => {
-      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+      if (
+        socket.responderId &&
+        currentResponderId &&
+        socket.responderId.toString() !== currentResponderId
+      ) {
         socket.emit("notify-on-the-way", {
           reportId: updated._id,
           type: updated.type,
@@ -198,6 +245,24 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     const socketMap = req.app.get("socketMap");
     const residentSocketId = socketMap.get(report.username);
 
+    // Update report instead of deleting
+    report.status = "declined";
+
+    // ✅ Log responder action
+    report.responders.push({
+      responderId: req.user._id,
+      fullName: responderName,
+      action: "declined",
+      timestamp: new Date(),
+    });
+
+    // ✅ Mark resolvedAt if not already set
+    if (!report.resolvedAt) {
+      report.resolvedAt = new Date();
+    }
+
+    await report.save();
+
     // Notify resident
     if (residentSocketId) {
       io.to(residentSocketId).emit("declined", {
@@ -209,9 +274,14 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     }
 
     // Notify other responders
-    const currentResponderId = req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    const currentResponderId =
+      req.user?._id?.toString() || req.user?.responderId || req.user?.username;
     io.sockets.sockets.forEach((socket) => {
-      if (socket.responderId && currentResponderId && socket.responderId.toString() !== currentResponderId) {
+      if (
+        socket.responderId &&
+        currentResponderId &&
+        socket.responderId.toString() !== currentResponderId
+      ) {
         socket.emit("responder-declined", {
           reportId,
           type: report.type,
@@ -222,11 +292,16 @@ router.delete("/:id", authMiddleware, async (req, res) => {
       }
     });
 
-    res.json({ message: "Report declined (hidden only for the acting responder)." });
+    res.json({
+      message: "Report declined (status updated, not deleted).",
+      reportId: report._id,
+      status: report.status,
+    });
   } catch (err) {
     console.error("❌ Failed to process decline:", err);
     res.status(500).json({ error: "Failed to process decline." });
   }
 });
+
 
 module.exports = router;
