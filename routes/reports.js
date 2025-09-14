@@ -7,7 +7,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const responderActionSchema = new mongoose.Schema({
   responderId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   fullName: String,
-  action: { type: String, enum: ["on the way", "responded", "declined"] },
+  action: { type: String, enum: ["on the way", "responded", "declined", "arrived"] },
   timestamp: { type: Date, default: Date.now },
 });
 
@@ -300,6 +300,67 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("❌ Failed to process decline:", err);
     res.status(500).json({ error: "Failed to process decline." });
+  }
+});
+
+// ---------------------------
+// PATCH /api/reports/:id/arrived — mark report as arrived
+// ---------------------------
+router.patch("/:id/arrived", authMiddleware, async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: "Report not found." });
+
+    const responderName = `${req.user.firstName} ${req.user.lastName}`;
+
+    // ✅ Track responder action in DB
+    report.responders.push({
+      responderId: req.user._id,
+      fullName: responderName,
+      action: "arrived",
+      timestamp: new Date(),
+    });
+
+    await report.save();
+
+    const io = req.app.get("io");
+    const socketMap = req.app.get("socketMap");
+    const residentSocketId = socketMap.get(report.username);
+
+    // ✅ Notify resident
+    if (residentSocketId) {
+      io.to(residentSocketId).emit("arrived", {
+        type: report.type,
+        responderName,
+        residentName: `${report.firstName} ${report.lastName}`,
+        time: new Date().toISOString(),
+      });
+    }
+
+    // ✅ Notify ONLY other responders (not self)
+    const currentResponderId =
+      req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+
+    io.sockets.sockets.forEach((socket) => {
+      if (
+        socket.responderId &&
+        currentResponderId &&
+        socket.responderId.toString() !== currentResponderId
+      ) {
+        socket.emit("notify-arrived", {
+          reportId: report._id,
+          type: report.type,
+          responderName,
+          residentName: `${report.firstName} ${report.lastName}`,
+          time: new Date().toISOString(),
+        });
+      }
+    });
+
+    res.json({ message: "Report marked as arrived", reportId: report._id });
+  } catch (err) {
+    console.error("❌ Failed to mark report as arrived:", err);
+    res.status(500).json({ error: "Failed to mark as arrived." });
   }
 });
 
