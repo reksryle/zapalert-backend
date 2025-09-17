@@ -69,7 +69,10 @@ router.post("/", async (req, res) => {
     });
 
     await newReport.save();
-    res.status(201).json({ message: "Report submitted successfully!" });
+    res.status(201).json({ 
+      message: "Report submitted successfully!",
+      reportId: newReport._id // Add this line
+    });
   } catch (err) {
     console.error("❌ Failed to save report:", err);
     res.status(500).json({ error: "Failed to save report." });
@@ -364,5 +367,37 @@ router.patch("/:id/arrived", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------------------
+// PATCH /api/reports/:id/cancel — cancel a report
+// ---------------------------
+router.patch("/:id/cancel", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const report = await Report.findById(id);
+    
+    if (!report) {
+      return res.status(404).json({ error: "Report not found." });
+    }
+
+    // Update report status to cancelled
+    report.status = "cancelled";
+    await report.save();
+
+    const io = req.app.get("io");
+    
+    // Notify all responders about the cancellation
+    io.emit("report-cancelled", {
+      reportId: report._id,
+      type: report.type,
+      residentName: `${report.firstName} ${report.lastName}`,
+      time: new Date().toISOString(),
+    });
+
+    res.json({ message: "Report cancelled successfully", reportId: report._id });
+  } catch (err) {
+    console.error("❌ Failed to cancel report:", err);
+    res.status(500).json({ error: "Failed to cancel report." });
+  }
+});
 
 module.exports = router;
