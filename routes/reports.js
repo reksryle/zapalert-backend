@@ -22,8 +22,9 @@ const reportSchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   status: { type: String, default: "pending" },
-  responders: [responderActionSchema],   // 👈 NEW
-  resolvedAt: { type: Date },            // 👈 NEW
+  cancellationReason: { type: String }, 
+  responders: [responderActionSchema],
+  resolvedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -373,14 +374,17 @@ router.patch("/:id/arrived", authMiddleware, async (req, res) => {
 router.patch("/:id/cancel", async (req, res) => {
   try {
     const { id } = req.params;
+    const { reason } = req.body;
+    
     const report = await Report.findById(id);
     
     if (!report) {
       return res.status(404).json({ error: "Report not found." });
     }
 
-    // Update report status to cancelled
+    // Update report status to cancelled and store reason
     report.status = "cancelled";
+    report.cancellationReason = reason || "No reason provided";
     await report.save();
 
     const io = req.app.get("io");
@@ -390,10 +394,15 @@ router.patch("/:id/cancel", async (req, res) => {
       reportId: report._id,
       type: report.type,
       residentName: `${report.firstName} ${report.lastName}`,
+      cancellationReason: report.cancellationReason,
       time: new Date().toISOString(),
     });
 
-    res.json({ message: "Report cancelled successfully", reportId: report._id });
+    res.json({ 
+      message: "Report cancelled successfully", 
+      reportId: report._id,
+      cancellationReason: report.cancellationReason
+    });
   } catch (err) {
     console.error("❌ Failed to cancel report:", err);
     res.status(500).json({ error: "Failed to cancel report." });
