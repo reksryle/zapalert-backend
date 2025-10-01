@@ -369,7 +369,32 @@ router.patch("/:id/arrived", authMiddleware, async (req, res) => {
 });
 
 // ---------------------------
-// PATCH /api/reports/:id/cancel — cancel a report
+// PATCH /api/reports/:id/followup — resident requests follow-up
+// ---------------------------
+router.patch("/:id/followup", async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ error: "Report not found." });
+
+    const io = req.app.get("io");
+
+    // Notify all responders about follow-up request
+    io.emit("resident-followup", {
+      reportId: report._id,
+      type: report.type,
+      residentName: `${report.firstName} ${report.lastName}`,
+      time: new Date().toISOString(),
+    });
+
+    res.json({ message: "Follow-up request sent to responders" });
+  } catch (err) {
+    console.error("❌ Failed to send follow-up:", err);
+    res.status(500).json({ error: "Failed to send follow-up request." });
+  }
+});
+
+// ---------------------------
+// PATCH /api/reports/:id/cancel — cancel a report with responder count check
 // ---------------------------
 router.patch("/:id/cancel", async (req, res) => {
   try {
@@ -382,26 +407,34 @@ router.patch("/:id/cancel", async (req, res) => {
       return res.status(404).json({ error: "Report not found." });
     }
 
+    // Count how many responders are currently "on the way"
+    const activeResponders = report.responders.filter(
+      responder => responder.action === "on the way"
+    ).length;
+
     // Update report status to cancelled and store reason
     report.status = "cancelled";
     report.cancellationReason = reason || "No reason provided";
+    report.cancellationTime = new Date();
     await report.save();
 
     const io = req.app.get("io");
     
-    // Notify all responders about the cancellation
+    // Notify all responders about the cancellation lah
     io.emit("report-cancelled", {
       reportId: report._id,
       type: report.type,
       residentName: `${report.firstName} ${report.lastName}`,
       cancellationReason: report.cancellationReason,
+      activeResponders: activeResponders,
       time: new Date().toISOString(),
     });
 
     res.json({ 
       message: "Report cancelled successfully", 
       reportId: report._id,
-      cancellationReason: report.cancellationReason
+      cancellationReason: report.cancellationReason,
+      activeResponders: activeResponders
     });
   } catch (err) {
     console.error("❌ Failed to cancel report:", err);
