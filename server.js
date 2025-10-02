@@ -39,20 +39,24 @@ app.set("socketMap", connectedResidents);
 
 
 // ✅ Socket.IO connection handling
-
 io.on("connection", (socket) => {
   console.log("✅ New client connected:", socket.id);
+  
   // Resident joins
   socket.on("join-resident", (username) => {
     connectedResidents.set(username, socket.id);
     console.log(`📍 Resident ${username} connected with socket ID: ${socket.id}`);
   });
-  // Responder joins
-  socket.on("join-responder", (responderId) => {
+  
+  // Responder joins - store both ID and name
+  socket.on("join-responder", (responderData) => {
+    const { responderId, responderName } = responderData;
     socket.responderId = responderId;
+    socket.responderName = responderName; // Store responder name for filtering
     connectedResponders.set(responderId, socket.id);
-    console.log(`📍 Responder ${responderId} connected with socket ID: ${socket.id}`);
+    console.log(`📍 Responder ${responderName} (${responderId}) connected with socket ID: ${socket.id}`);
   });
+  
   // Disconnect cleanup
   socket.on("disconnect", () => {
     for (let [username, id] of connectedResidents.entries()) {

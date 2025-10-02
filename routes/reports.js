@@ -244,6 +244,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 
     const io = req.app.get("io");
     const responderName = `${req.user.firstName} ${req.user.lastName}`;
+    const responderUsername = req.user.username; // Get responder username
     const reportId = report._id;
 
     const socketMap = req.app.get("socketMap");
@@ -278,8 +279,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     }
 
     // Notify other responders
-    const currentResponderId =
-      req.user?._id?.toString() || req.user?.responderId || req.user?.username;
+    const currentResponderId = req.user?._id?.toString();
     io.sockets.sockets.forEach((socket) => {
       if (
         socket.responderId &&
@@ -378,15 +378,35 @@ router.patch("/:id/followup", async (req, res) => {
 
     const io = req.app.get("io");
 
-    // Notify all responders about follow-up request
-    io.emit("resident-followup", {
-      reportId: report._id,
-      type: report.type,
-      residentName: `${report.firstName} ${report.lastName}`,
-      time: new Date().toISOString(),
+    // Get responders who are "on the way" and NOT declined
+    const onTheWayResponders = report.responders
+      .filter(responder => responder.action === "on the way")
+      .map(responder => responder.fullName);
+
+    // Get responders who have declined this report
+    const declinedResponders = report.responders
+      .filter(responder => responder.action === "declined")
+      .map(responder => responder.fullName);
+
+    // Notify only responders who are "on the way" and haven't declined
+    io.sockets.sockets.forEach((socket) => {
+      // Check if this socket belongs to a responder who is on the way and hasn't declined
+      const shouldNotify = onTheWayResponders.some(responderName => 
+        socket.responderName === responderName && 
+        !declinedResponders.includes(responderName)
+      );
+
+      if (shouldNotify) {
+        socket.emit("resident-followup", {
+          reportId: report._id,
+          type: report.type,
+          residentName: `${report.firstName} ${report.lastName}`,
+          time: new Date().toISOString(),
+        });
+      }
     });
 
-    res.json({ message: "Follow-up request sent to responders" });
+    res.json({ message: "Follow-up request sent to responders on the way" });
   } catch (err) {
     console.error("❌ Failed to send follow-up:", err);
     res.status(500).json({ error: "Failed to send follow-up request." });
