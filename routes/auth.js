@@ -196,22 +196,76 @@ router.patch("/approve/:id", async (req, res) => {
   }
 });
 
-// ✅ DELETE reject user (also delete uploaded image)
+// ✅ NEW: REJECT user (no password required for pending users)
 router.delete("/reject/:id", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // Only allow rejecting pending users
+    if (user.status !== "pending") {
+      return res.status(400).json({ message: "Can only reject pending users." });
+    }
+
+    // Delete the uploaded ID image
     if (user.idImagePath) {
       const absolutePath = path.resolve(user.idImagePath);
       if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
     }
 
     await User.findByIdAndDelete(req.params.id);
-    res.json({ message: "User and image deleted successfully" });
+    res.json({ message: "User rejected successfully" });
+  } catch (err) {
+    console.error("Reject error:", err);
+    res.status(500).json({ message: "Server error during rejection" });
+  }
+});
+
+// ✅ NEW: DELETE approved user (requires admin password)
+router.delete("/delete/:id", async (req, res) => {
+  try {
+    const { adminPassword } = req.body;
+    
+    const token = req.cookies?.zapToken;
+    if (!token) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const adminUser = await User.findById(decoded.userId);
+    
+    if (!adminUser || adminUser.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin role required." });
+    }
+
+    if (!adminPassword) {
+      return res.status(400).json({ message: "Admin password is required." });
+    }
+
+    const isPasswordValid = await bcrypt.compare(adminPassword, adminUser.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid admin password." });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Delete uploaded ID image if exists
+    if (user.idImagePath) {
+      const absolutePath = path.resolve(user.idImagePath);
+      if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ message: "User deleted successfully" });
   } catch (err) {
     console.error("Delete error:", err);
-    res.status(500).json({ message: "Server error during delete" });
+    
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid authentication token." });
+    }
+    
+    res.status(500).json({ message: "Server error during deletion" });
   }
 });
 
